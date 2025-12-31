@@ -1,0 +1,12 @@
+pytest
+pydicom
+pynetdicom
+python-dotenv
+google-cloud-bigquery
+pandas
+openpyxl
+# DICOM decompression support (for automatic decompression of JPEG/JPEG2000/RLE)
+pylibjpeg>=2.0.0
+pylibjpeg-libjpeg>=2.0.0
+pylibjpeg-openjpeg>=2.0.0
+pillow>=10.0.0
