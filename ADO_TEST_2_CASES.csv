@@ -1,9 +1,0 @@
-ID,Work Item Type,Title,Test Step,Step Action,Step Expected
-,Test Case,Verify OPV GPA Visual Fields Routing,1,Open DICOM test file or create new DICOM file,DICOM file available for editing
-,,,2,Set Modality tag to OPV,Modality equals OPV
-,,,3,Set SeriesDescription tag to GPA,SeriesDescription equals GPA
-,,,4,Set PatientID tag to TEST_OPV_GPA_001,PatientID set
-,Test Case,Verify OPV SFA Visual Fields Routing,1,Open DICOM test file,File available
-,,,2,Set Modality tag to OPV,Modality equals OPV
-,,,3,Set SeriesDescription tag to SFA,SeriesDescription equals SFA
-,,,4,Set PatientID to TEST_OPV_SFA_001,PatientID set
