@@ -78,66 +78,39 @@ def update_tags_ds(ds, tag_name: str, value):
     Args:
         ds: pydicom Dataset object
         tag_name: Name of the tag to update (e.g., "StudyInstanceUID")
+               Can be standard keyword or hex string for private tags (e.g., "30210010")
         value: Value to set for the tag
+        
+    Returns:
+        Updated dataset
     """
-    if tag_name == "SpecimenLabelInImage":
-        ds.SpecimenLabelInImage = value
-    if tag_name == "BurnedInAnnotation":
-        ds.BurnedInAnnotation = value
-    if tag_name == "StudyInstanceUID":
-        ds.StudyInstanceUID = value
-    if tag_name == "SeriesInstanceUID":
-        ds.SeriesInstanceUID = value
-    if tag_name == "DimensionOrganizationType":
-        ds.DimensionOrganizationType = value
-    if tag_name == "SOPClassUID":
-        ds.SOPClassUID = value
-    if tag_name == "SOPInstanceUID":
-        ds.SOPInstanceUID = value
-    if tag_name == "BarcodeValue":
-        ds.BarcodeValue = value
-    if tag_name == "NumberOfFrames":
-        ds.NumberOfFrames = value
-    if tag_name == "AccessionNumber":
-        ds.AccessionNumber = value
-    if tag_name == "ContainerIdentifier":
-        ds.ContainerIdentifier = value
-    if tag_name == "StudyInstanceUID":
-        ds.StudyInstanceUID = value
-    if tag_name == "FrameOfReferenceUID":
-        ds.FrameOfReferenceUID = value
-    if tag_name == "PatientID":
-        ds.PatientID = value
-    if tag_name == "PatientName":
-        ds.PatientName = value
-    if tag_name == "PatientBirthDate":
-        ds.PatientBirthDate = value
-    if tag_name == "InstitutionName":
-        ds.InstitutionName = value
-    if tag_name == "ReferringPhysicianName":
-        ds.ReferringPhysicianName = value
-    if tag_name == "DeviceSerialNumber":
-        ds.DeviceSerialNumber = value
+    # Handle private tags specified as hex strings (8 characters)
+    if len(tag_name) == 8 and all(c in '0123456789ABCDEFabcdef' for c in tag_name):
+        # Parse as hex tag: "30210010" -> (0x3021, 0x0010)
+        try:
+            group = int(tag_name[0:4], 16)
+            element = int(tag_name[4:8], 16)
+            if (group, element) in ds:
+                ds[group, element].value = value
+            else:
+                # Tag doesn't exist, skip silently
+                pass
+        except (ValueError, KeyError):
+            # Invalid hex format or tag doesn't exist
+            pass
+        return ds
     
-    # Handle private tags
-    if tag_name == "30210010":
-        if (0x3021, 0x0010) in ds:
-            ds[0x3021, 0x0010].value = value
-    if tag_name == "30211001":
-        if (0x3021, 0x1001) in ds:
-            ds[0x3021, 0x1001].value = value
-    if tag_name == "30211003":
-        if (0x3021, 0x1003) in ds:
-            ds[0x3021, 0x1003].value = value
-    if tag_name == "30211004":
-        if (0x3021, 0x1004) in ds:
-            ds[0x3021, 0x1004].value = value
-    if tag_name == "00020002":
-        if (0x0002, 0x0002) in ds:
-            ds[0x0002, 0x0002].value = value
-    if tag_name == "00100040":
-        if (0x0010, 0x0040) in ds:
-            ds[0x0010, 0x0040].value = value
+    # Handle standard DICOM keywords using pydicom's attribute system
+    try:
+        if hasattr(ds, tag_name):
+            setattr(ds, tag_name, value)
+        else:
+            # Tag doesn't exist in dataset - could add it or skip
+            # For now, add it using pydicom's keyword system
+            setattr(ds, tag_name, value)
+    except Exception:
+        # Silently skip invalid tags or failed updates
+        pass
     
     return ds
 
@@ -162,20 +135,32 @@ def add_tags(dcm_file, tag_name, value):
     
     Args:
         dcm_file: Path to DICOM file
-        tag_name: Name of the tag to add
+        tag_name: Name of the tag to add (standard keyword or hex string for private tags)
         value: Value for the tag
+        
+    Note:
+        For standard tags, pydicom automatically determines the VR (Value Representation).
+        For private tags, use hex format (e.g., "30210010").
     """
     ds = dcmread(dcm_file)
-    if tag_name == "SpecimenLabelInImage":
-        ds.add_new(0x00480010, 'CS', value)
-    if tag_name == "BurnedInAnnotation":
-        ds.add_new(0x00280301, 'CS', value)
-    if tag_name == "StudyInstanceUID":
-        ds.add_new(0x0020, 0x000d, 'UI', value)
-    if tag_name == "SeriesInstanceUID":
-        ds.add_new(0x0020, 0x000e, 'UI', value)
-    if tag_name == "DimensionOrganizationType":
-        ds.add_new(0x00209311, 'CS', value)
+    
+    try:
+        # Handle private tags specified as hex strings
+        if len(tag_name) == 8 and all(c in '0123456789ABCDEFabcdef' for c in tag_name):
+            group = int(tag_name[0:4], 16)
+            element = int(tag_name[4:8], 16)
+            # For private tags, we need to specify VR explicitly
+            # Default to 'LO' for private tags unless specified otherwise
+            if (group, element) not in ds:
+                ds.add_new((group, element), 'LO', value)
+        else:
+            # Standard DICOM keywords - use setattr which auto-handles VR
+            if not hasattr(ds, tag_name):
+                setattr(ds, tag_name, value)
+    except Exception:
+        # Silently skip on error
+        pass
+    
     ds.save_as(dcm_file)
 
 
@@ -185,15 +170,25 @@ def remove_tags(dcm_file, tag_name):
     
     Args:
         dcm_file: Path to DICOM file
-        tag_name: Name of the tag to remove
+        tag_name: Name of the tag to remove (standard keyword or hex string for private tags)
     """
     ds = dcmread(dcm_file)
-    if tag_name == "BarcodeValue":
-        if (0x2200, 0x0005) in ds:
-            del ds[0x2200, 0x0005]
-    if tag_name == "PatientSex":
-        if (0x0010, 0x0040) in ds:
-            del ds[0x0010, 0x0040]
+    
+    try:
+        # Handle private tags specified as hex strings
+        if len(tag_name) == 8 and all(c in '0123456789ABCDEFabcdef' for c in tag_name):
+            group = int(tag_name[0:4], 16)
+            element = int(tag_name[4:8], 16)
+            if (group, element) in ds:
+                del ds[group, element]
+        else:
+            # Standard DICOM keywords
+            if hasattr(ds, tag_name):
+                delattr(ds, tag_name)
+    except Exception:
+        # Silently skip on error
+        pass
+    
     ds.save_as(dcm_file)
 
 
@@ -203,15 +198,34 @@ def get_tag_value(dcm_file, tag_name):
     
     Args:
         dcm_file: Path to DICOM file
-        tag_name: Name of the tag to retrieve
+        tag_name: Name of the tag to retrieve (e.g., 'PatientID', 'StudyInstanceUID')
         
     Returns:
-        Tag value or None
+        Tag value or None if tag doesn't exist or error occurs
+        
+    Examples:
+        get_tag_value('file.dcm', 'PatientID')
+        get_tag_value('file.dcm', 'StudyInstanceUID')
+        get_tag_value('file.dcm', 'Modality')
     """
-    ds = dcmread(dcm_file)
-    if tag_name == "StudyInstanceUID":
-        return ds[0x0020, 0x000d].value
-    return None
+    try:
+        ds = dcmread(dcm_file)
+        
+        # Try to get the tag value using pydicom's attribute access
+        # This handles standard DICOM keywords like 'PatientID', 'StudyInstanceUID', etc.
+        if hasattr(ds, tag_name):
+            value = getattr(ds, tag_name)
+            # Handle MultiValue (list-like) objects
+            if hasattr(value, '__iter__') and not isinstance(value, (str, bytes)):
+                return list(value)
+            return value
+        
+        # If not found, return None
+        return None
+        
+    except Exception as e:
+        # Return None on any error (file not found, not a valid DICOM, etc.)
+        return None
 
 
 def update_tags_all_files(dir, tag_name, value):
@@ -232,52 +246,56 @@ def update_bar_code_file(dcm_file, new_bar_code):
     """
     Update the barcode value in a DICOM file.
     
+    DEPRECATED: Use update_tags(dcm_file, 'BarcodeValue', new_bar_code) instead.
+    This function is maintained for backward compatibility.
+    
     Args:
         dcm_file: Path to DICOM file
         new_bar_code: New barcode value
     """
-    ds = dcmread(dcm_file)
-    ds.BarcodeValue = new_bar_code
-    ds.save_as(dcm_file)
+    update_tags(dcm_file, 'BarcodeValue', new_bar_code)
 
 
 def update_bar_code_all_files(dir, new_bar_code):
     """
     Update barcode value in all DICOM files in a directory.
     
+    DEPRECATED: Use update_tags_all_files(dir, 'BarcodeValue', new_bar_code) instead.
+    This function is maintained for backward compatibility.
+    
     Args:
         dir: Directory containing DICOM files
         new_bar_code: New barcode value
     """
-    files = get_dcm_files(dir)
-    for dcm_file in files:
-        update_bar_code_file(dcm_file, new_bar_code)
+    update_tags_all_files(dir, 'BarcodeValue', new_bar_code)
 
 
 def update_image_type_file(dcm_file, new_image_type):
     """
     Update the ImageType tag in a DICOM file.
     
+    DEPRECATED: Use update_tags(dcm_file, 'ImageType', new_image_type) instead.
+    This function is maintained for backward compatibility.
+    
     Args:
         dcm_file: Path to DICOM file
         new_image_type: New ImageType value (e.g., ['DERIVED', 'PRIMARY', 'VOLUME', 'RESAMPLED'])
     """
-    ds = dcmread(dcm_file)
-    ds.ImageType = new_image_type
-    ds.save_as(dcm_file)
+    update_tags(dcm_file, 'ImageType', new_image_type)
 
 
 def update_dim_org_type(dcm_file, new_dim_org_type):
     """
     Update the DimensionOrganizationType tag in a DICOM file.
     
+    DEPRECATED: Use update_tags(dcm_file, 'DimensionOrganizationType', new_dim_org_type) instead.
+    This function is maintained for backward compatibility.
+    
     Args:
         dcm_file: Path to DICOM file
         new_dim_org_type: New DimensionOrganizationType value
     """
-    ds = dcmread(dcm_file)
-    ds.DimensionOrganizationType = new_dim_org_type
-    ds.save_as(dcm_file)
+    update_tags(dcm_file, 'DimensionOrganizationType', new_dim_org_type)
 
 
 def is_valid_tag(keyword):
